@@ -41,6 +41,7 @@ export class Game {
     this.teleport = new TeleportSystem();
     this.audio = new AudioManager();
     this.collapseTimer = 0;
+    this.digShakeTimer = 0;
 
     this.baseBuildingX = Math.floor(WORLD_WIDTH / 2) - 3;
 
@@ -279,6 +280,10 @@ export class Game {
       this.player.update(dt, this.world, this.input);
     }
 
+    if (this.digShakeTimer > 0) {
+      this.digShakeTimer = Math.max(0, this.digShakeTimer - dt);
+    }
+
     this.updateOverclockSound();
 
     this.teleport.update(dt, this.player, this.world, this.particles, (cost) => {
@@ -339,7 +344,13 @@ export class Game {
 
       if (result.broke) {
         this.stats.blocksDug++;
-        this.renderer.shake(1, 0.1);
+
+        if (this.digShakeTimer <= 0) {
+          const shakeStrength = this.player.overclockActive ? 0.6 : 1;
+          const shakeDuration = this.player.overclockActive ? 0.06 : 0.1;
+          this.renderer.shake(shakeStrength, shakeDuration);
+          this.digShakeTimer = 0.12;
+        }
 
         if (result.ore) {
           if (this.player.addOre(result.ore)) {
@@ -384,10 +395,10 @@ export class Game {
           setTimeout(() => this.triggerCollapse(target.x, target.y), 1000);
         }
 
-        const effectiveFuelConsumption = this.player.getEffectiveFuelConsumption();
-        const effectiveHeatGeneration = this.player.getEffectiveHeatGeneration();
-        this.player.fuel -= effectiveFuelConsumption * 0.5 * dt * 60;
-        this.player.addHeat(effectiveHeatGeneration * 0.3 * dt * 60);
+        const baseFuelAmount = this.player.fuelConsumption * 0.5 * dt * 60;
+        const baseHeatAmount = this.player.heatGeneration * 0.3 * dt * 60;
+        this.player.consumeFuel(baseFuelAmount, false);
+        this.player.generateHeat(baseHeatAmount, true);
       }
     } else if (result.tooHard) {
       this.ui.showWarning('⛏️ 钻头等级不够，无法挖掘此方块！', 1000);

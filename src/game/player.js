@@ -231,6 +231,24 @@ export class Player {
     }
   }
 
+  consumeFuel(baseAmount, applyOverclock = true) {
+    let amount = baseAmount;
+    if (applyOverclock && this.overclockActive) {
+      amount *= this.getOverclockFuelMultiplier();
+    }
+    this.fuel -= amount;
+    return amount;
+  }
+
+  generateHeat(baseAmount, applyOverclock = true) {
+    let amount = baseAmount;
+    if (applyOverclock && this.overclockActive) {
+      amount *= this.getOverclockHeatMultiplier();
+    }
+    this.addHeat(amount);
+    return amount;
+  }
+
   canShoot(now) {
     return now - this.lastShot >= this.weaponCooldown;
   }
@@ -293,10 +311,9 @@ export class Player {
     this.y = Math.max(this.height / 2, this.y);
 
     const isUnderground = this.tileY >= SURFACE_Y;
-    const effectiveFuelConsumption = this.getEffectiveFuelConsumption();
 
     if (this.moving) {
-      this.fuel -= effectiveFuelConsumption * dt * 60;
+      this.consumeFuel(this.fuelConsumption * dt * 60, true);
     }
 
     if (isUnderground) {
@@ -305,9 +322,8 @@ export class Player {
       this.oxygen = Math.min(this.maxOxygen, this.oxygen + this.oxygenConsumption * 3 * dt * 60);
     }
 
-    const effectiveHeatGeneration = this.getEffectiveHeatGeneration();
     if (this.moving && isUnderground) {
-      this.addHeat(effectiveHeatGeneration * dt * 60);
+      this.generateHeat(this.heatGeneration * dt * 60, true);
     } else if (!isUnderground) {
       this.heat = Math.max(20, this.heat - this.coolingRate * 2 * dt * 60);
     } else {
