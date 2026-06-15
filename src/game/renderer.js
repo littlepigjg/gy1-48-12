@@ -328,6 +328,55 @@ export class Renderer {
     const half = size / 2;
     const time = Date.now() * 0.001;
 
+    if (player.overclockActive) {
+      const heatRatio = player.overclockHeat / 100;
+      const pulseSize = 1 + Math.sin(time * 8) * 0.08;
+
+      for (let ring = 0; ring < 3; ring++) {
+        const ringOffset = ring * 0.33;
+        const ringProgress = ((time * 0.8 + ringOffset) % 1);
+        const ringSize = size * 1.2 + ringProgress * size * 1.5;
+        const baseAlpha = 0.5 - ringProgress * 0.4;
+        const r = Math.floor(255);
+        const g = Math.floor(200 - heatRatio * 100);
+        const b = Math.floor(50 - heatRatio * 30);
+        this.ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${baseAlpha})`;
+        this.ctx.lineWidth = 4 - ringProgress * 2;
+        this.ctx.beginPath();
+        this.ctx.arc(screen.x, screen.y, ringSize * pulseSize, 0, Math.PI * 2);
+        this.ctx.stroke();
+      }
+
+      const glowRadius = size * 1.8;
+      const gradient = this.ctx.createRadialGradient(
+        screen.x, screen.y, 0,
+        screen.x, screen.y, glowRadius
+      );
+      const glowR = 255;
+      const glowG = Math.floor(180 - heatRatio * 80);
+      const glowB = Math.floor(30 - heatRatio * 20);
+      gradient.addColorStop(0, `rgba(${glowR}, ${glowG}, ${glowB}, 0.35)`);
+      gradient.addColorStop(0.5, `rgba(${glowR}, ${glowG}, ${glowB}, 0.15)`);
+      gradient.addColorStop(1, `rgba(${glowR}, ${glowG}, ${glowB}, 0)`);
+      this.ctx.fillStyle = gradient;
+      this.ctx.beginPath();
+      this.ctx.arc(screen.x, screen.y, glowRadius * pulseSize, 0, Math.PI * 2);
+      this.ctx.fill();
+
+      for (let i = 0; i < 8; i++) {
+        const angle = time * 3 + (i / 8) * Math.PI * 2;
+        const orbitRadius = size * 0.9 + Math.sin(time * 5 + i) * 8;
+        const px = screen.x + Math.cos(angle) * orbitRadius;
+        const py = screen.y + Math.sin(angle) * orbitRadius;
+        const sparkSize = 3 + Math.sin(time * 10 + i * 2) * 1.5;
+        const sparkAlpha = 0.7 + Math.sin(time * 6 + i) * 0.3;
+        this.ctx.fillStyle = `rgba(255, ${200 + Math.floor(Math.sin(time * 4 + i) * 55)}, 50, ${sparkAlpha})`;
+        this.ctx.beginPath();
+        this.ctx.arc(px, py, sparkSize, 0, Math.PI * 2);
+        this.ctx.fill();
+      }
+    }
+
     if (teleportSystem && teleportSystem.isTeleporting()) {
       const progress = teleportSystem.progress;
       const rings = 3;

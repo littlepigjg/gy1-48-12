@@ -1,4 +1,4 @@
-import { TILE_SIZE, WORLD_WIDTH, SURFACE_Y, UPGRADE_DEFS, TILE_TYPES } from './constants.js';
+import { TILE_SIZE, WORLD_WIDTH, SURFACE_Y, UPGRADE_DEFS, TILE_TYPES, OVERCLOCK } from './constants.js';
 
 export class Player {
   constructor(startX, startY) {
@@ -21,8 +21,15 @@ export class Player {
       oxygen_tank: 0,
       cooling: 0,
       armor: 0,
-      weapon: 0
+      weapon: 0,
+      overclock: 0
     };
+
+    this.overclockActive = false;
+    this.overclockHeat = 0;
+    this.overclockTimer = 0;
+    this.overclockCooldown = 0;
+    this.overclockUnlocked = false;
 
     this.maxFuel = 100 + this.upgrades.fuel_tank * 40;
     this.fuel = this.maxFuel;
@@ -82,12 +89,85 @@ export class Player {
     this.weaponDamage = 10 + this.upgrades.weapon * 8;
     this.weaponCooldown = Math.max(150, 500 - this.upgrades.weapon * 70);
 
+    if (this.upgrades.overclock > 0) {
+      this.overclockUnlocked = true;
+    }
+
     this.fuel += (this.maxFuel - oldMaxFuel);
     this.oxygen += (this.maxOxygen - oldMaxOxygen);
     this.health += (this.maxHealth - oldMaxHealth);
     if (this.fuel > this.maxFuel) this.fuel = this.maxFuel;
     if (this.oxygen > this.maxOxygen) this.oxygen = this.maxOxygen;
     if (this.health > this.maxHealth) this.health = this.maxHealth;
+  }
+
+  getOverclockSpeedMultiplier() {
+    const level = this.upgrades.overclock;
+    return OVERCLOCK.BASE_SPEED_MULTIPLIER + level * 0.1;
+  }
+
+  getOverclockDrillMultiplier() {
+    const level = this.upgrades.overclock;
+    return OVERCLOCK.BASE_DRILL_MULTIPLIER + level * 0.2;
+  }
+
+  getOverclockHeatMultiplier() {
+    const level = this.upgrades.overclock;
+    return Math.max(1.0, OVERCLOCK.BASE_HEAT_MULTIPLIER - level * 0.2);
+  }
+
+  getOverclockFuelMultiplier() {
+    const level = this.upgrades.overclock;
+    return Math.max(1.0, OVERCLOCK.BASE_FUEL_MULTIPLIER - level * 0.15);
+  }
+
+  getOverclockHeatRate() {
+    const level = this.upgrades.overclock;
+    return Math.max(2.0, OVERCLOCK.HEAT_PER_SECOND - level * 0.8);
+  }
+
+  canActivateOverclock() {
+    if (!this.overclockUnlocked) return false;
+    if (this.overclockActive) return false;
+    if (this.overclockCooldown > 0) return false;
+    if (this.fuel < OVERCLOCK.MINIMUM_ACTIVATION_FUEL) return false;
+    return true;
+  }
+
+  activateOverclock() {
+    if (!this.canActivateOverclock()) return false;
+    this.overclockActive = true;
+    this.overclockTimer = OVERCLOCK.MAX_DURATION;
+    this.overclockHeat = 0;
+    return true;
+  }
+
+  deactivateOverclock(forced = false) {
+    if (!this.overclockActive) return;
+    this.overclockActive = false;
+    this.overclockTimer = 0;
+    if (forced) {
+      this.overclockCooldown = OVERCLOCK.COOLDOWN_DURATION;
+    } else {
+      this.overclockCooldown = OVERCLOCK.COOLDOWN_DURATION * (this.overclockHeat / OVERCLOCK.MAX_HEAT);
+    }
+    this.overclockHeat = 0;
+  }
+
+  getEffectiveSpeed() {
+    return this.overclockActive ? this.speed * this.getOverclockSpeedMultiplier() : this.speed;
+  }
+
+  getEffectiveDrillPower() {
+    return this.overclockActive ? this.drillPower * this.getOverclockDrillMultiplier() : this.drillPower;
+  }
+
+  getEffectiveFuelConsumption() {
+    return this.overclockActive ? this.fuelConsumption * this.getOverclockFuelMultiplier() : this.fuelConsumption;
+  }
+
+  getEffectiveHeatGeneration() {
+    return this.overclockActive ? this.heatGeneration * this.getOverclockHeatMultiplier() : this.heatGeneration;
   }
 
   getUpgradeCost(type) {
@@ -181,6 +261,22 @@ export class Player {
     const depth = this.tileY - SURFACE_Y;
     if (depth > this.maxDepth) this.maxDepth = depth;
 
+    if (this.overclockActive) {
+      this.overclockTimer -= dt;
+      this.overclockHeat += this.getOverclockHeatRate() * dt;
+
+      if (this.overclockTimer <= 0) {
+        this.deactivateOverclock(false);
+      } else if (this.overclockHeat >= OVERCLOCK.MAX_HEAT) {
+        this.overclockHeat = OVERCLOCK.MAX_HEAT;
+        this.deactivateOverclock(true);
+      }
+    }
+
+    if (this.overclockCooldown > 0) {
+      this.overclockCooldown = Math.max(0, this.overclockCooldown - dt);
+    }
+
     let moveX = 0, moveY = 0;
     if (input.left) moveX -= 1;
     if (input.right) moveX += 1;
@@ -201,7 +297,8 @@ export class Player {
       }
     }
 
-    const moveSpeed = this.speed * dt * 60;
+    const effectiveSpeed = this.getEffectiveSpeed();
+    const moveSpeed = effectiveSpeed * dt * 60;
     const newX = this.x + moveX * moveSpeed;
     const newY = this.y + moveY * moveSpeed;
 
@@ -216,9 +313,14 @@ export class Player {
     this.y = Math.max(this.height / 2, this.y);
 
     const isUnderground = this.tileY >= SURFACE_Y;
+    const effectiveFuelConsumption = this.getEffectiveFuelConsumption();
 
     if (this.moving) {
-      this.fuel -= this.fuelConsumption * dt * 60;
+      this.fuel -= effectiveFuelConsumption * dt * 60;
+    }
+
+    if (this.overclockActive) {
+      this.fuel -= effectiveFuelConsumption * 0.5 * dt * 60;
     }
 
     if (isUnderground) {
@@ -227,8 +329,9 @@ export class Player {
       this.oxygen = Math.min(this.maxOxygen, this.oxygen + this.oxygenConsumption * 3 * dt * 60);
     }
 
+    const effectiveHeatGeneration = this.getEffectiveHeatGeneration();
     if (this.moving && isUnderground) {
-      this.addHeat(this.heatGeneration * dt * 60);
+      this.addHeat(effectiveHeatGeneration * dt * 60);
     } else if (!isUnderground) {
       this.heat = Math.max(20, this.heat - this.coolingRate * 2 * dt * 60);
     } else {
@@ -238,6 +341,9 @@ export class Player {
     if (this.fuel < 0) {
       this.fuel = 0;
       this.health -= 0.1 * dt * 60;
+      if (this.overclockActive) {
+        this.deactivateOverclock(true);
+      }
     }
     if (this.oxygen < 0) {
       this.oxygen = 0;

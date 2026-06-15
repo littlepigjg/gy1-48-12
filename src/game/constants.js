@@ -84,6 +84,18 @@ export const TILE_ORE_MAP = {
   [TILE_TYPES.ORE_DIAMOND]: 'diamond'
 };
 
+export const OVERCLOCK = {
+  MAX_DURATION: 15,
+  COOLDOWN_DURATION: 30,
+  MAX_HEAT: 100,
+  BASE_SPEED_MULTIPLIER: 1.5,
+  BASE_DRILL_MULTIPLIER: 2.0,
+  BASE_HEAT_MULTIPLIER: 2.5,
+  BASE_FUEL_MULTIPLIER: 2.0,
+  HEAT_PER_SECOND: 6.5,
+  MINIMUM_ACTIVATION_FUEL: 10
+};
+
 export const UPGRADE_DEFS = {
   engine: {
     name: '发动机',
@@ -140,6 +152,13 @@ export const UPGRADE_DEFS = {
     description: '提升攻击力和射速',
     maxLevel: 5,
     costs: [350, 800, 2000, 5000, 12000]
+  },
+  overclock: {
+    name: '超频模块',
+    icon: '⚡',
+    description: '解锁超频模式，提升超频效率并降低热量生成',
+    maxLevel: 5,
+    costs: [500, 1200, 3000, 7000, 15000]
   }
 };
 

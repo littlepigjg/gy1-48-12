@@ -1,4 +1,4 @@
-import { ORE_PRICES, ORE_NAMES, UPGRADE_DEFS, TILE_SIZE, SURFACE_Y, DEPTH_BONUS_MULTIPLIER } from './constants.js';
+import { ORE_PRICES, ORE_NAMES, UPGRADE_DEFS, TILE_SIZE, SURFACE_Y, DEPTH_BONUS_MULTIPLIER, OVERCLOCK } from './constants.js';
 
 export class UIManager {
   constructor(game) {
@@ -96,7 +96,56 @@ export class UIManager {
     document.getElementById('oreRuby').textContent = p.cargo.ruby;
 
     this.updateTeleportUI();
+    this.updateOverclockUI();
     this.checkWarnings();
+  }
+
+  updateOverclockUI() {
+    const p = this.game.player;
+    const section = document.getElementById('overclockSection');
+    const statusEl = document.getElementById('overclockStatus');
+    const heatBar = document.getElementById('overclockHeatBar');
+    const heatText = document.getElementById('overclockHeatText');
+    const timerBar = document.getElementById('overclockTimerBar');
+    const timerText = document.getElementById('overclockTimerText');
+    const cooldownSection = document.getElementById('overclockCooldownSection');
+    const cooldownBar = document.getElementById('overclockCooldownBar');
+    const cooldownText = document.getElementById('overclockCooldownText');
+
+    if (!p.overclockUnlocked) {
+      section.classList.add('hidden');
+      return;
+    }
+
+    section.classList.remove('hidden');
+
+    if (p.overclockActive) {
+      statusEl.textContent = '🔥 运行中';
+      statusEl.className = 'text-yellow-300 animate-pulse';
+    } else if (p.overclockCooldown > 0) {
+      statusEl.textContent = '❄️ 冷却中';
+      statusEl.className = 'text-cyan-300';
+    } else {
+      statusEl.textContent = '✅ 就绪 (Q)';
+      statusEl.className = 'text-green-300';
+    }
+
+    const heatPct = Math.max(0, Math.min(100, (p.overclockHeat / OVERCLOCK.MAX_HEAT) * 100));
+    heatBar.style.width = heatPct + '%';
+    heatText.textContent = `${Math.floor(p.overclockHeat)}/${OVERCLOCK.MAX_HEAT}`;
+
+    const timerPct = Math.max(0, Math.min(100, (p.overclockTimer / OVERCLOCK.MAX_DURATION) * 100));
+    timerBar.style.width = timerPct + '%';
+    timerText.textContent = `${p.overclockTimer.toFixed(1)}s`;
+
+    if (p.overclockCooldown > 0) {
+      cooldownSection.classList.remove('hidden');
+      const cooldownPct = Math.max(0, Math.min(100, (p.overclockCooldown / OVERCLOCK.COOLDOWN_DURATION) * 100));
+      cooldownBar.style.width = cooldownPct + '%';
+      cooldownText.textContent = `${p.overclockCooldown.toFixed(1)}s`;
+    } else {
+      cooldownSection.classList.add('hidden');
+    }
   }
 
   updateTeleportUI() {

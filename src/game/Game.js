@@ -30,8 +30,13 @@ export class Game {
       down: false,
       dig: false,
       shoot: false,
-      teleport: false
+      teleport: false,
+      overclock: false
     };
+
+    this.audioCtx = null;
+    this.overclockSoundOscillator = null;
+    this.overclockSoundGain = null;
 
     this.bullets = [];
     this.particles = new ParticleSystem();
@@ -118,6 +123,10 @@ export class Game {
         case 'T':
           this.tryTeleport();
           break;
+        case 'q':
+        case 'Q':
+          this.toggleOverclock();
+          break;
         case 'Escape':
           if (this.ui.isShopOpen()) {
             this.ui.closeShop();
@@ -185,6 +194,149 @@ export class Game {
     }
   }
 
+  ensureAudioContext() {
+    if (!this.audioCtx) {
+      try {
+        this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      } catch (e) {
+        console.warn('Web Audio API not supported');
+      }
+    }
+    return this.audioCtx;
+  }
+
+  playOverclockStartSound() {
+    const ctx = this.ensureAudioContext();
+    if (!ctx) return;
+
+    const oscillator = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+
+    oscillator.type = 'sawtooth';
+    oscillator.frequency.setValueAtTime(200, ctx.currentTime);
+    oscillator.frequency.exponentialRampToValueAtTime(800, ctx.currentTime + 0.3);
+
+    gainNode.gain.setValueAtTime(0, ctx.currentTime);
+    gainNode.gain.linearRampToValueAtTime(0.2, ctx.currentTime + 0.1);
+    gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+
+    oscillator.connect(gainNode);
+    gainNode.connect(ctx.destination);
+
+    oscillator.start(ctx.currentTime);
+    oscillator.stop(ctx.currentTime + 0.4);
+  }
+
+  playOverclockStopSound(forced = false) {
+    const ctx = this.ensureAudioContext();
+    if (!ctx) return;
+
+    const oscillator = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+
+    oscillator.type = forced ? 'square' : 'sine';
+    oscillator.frequency.setValueAtTime(forced ? 600 : 400, ctx.currentTime);
+    oscillator.frequency.exponentialRampToValueAtTime(100, ctx.currentTime + 0.5);
+
+    gainNode.gain.setValueAtTime(0.2, ctx.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+
+    oscillator.connect(gainNode);
+    gainNode.connect(ctx.destination);
+
+    oscillator.start(ctx.currentTime);
+    oscillator.stop(ctx.currentTime + 0.5);
+  }
+
+  startOverclockLoopSound() {
+    const ctx = this.ensureAudioContext();
+    if (!ctx) return;
+
+    this.stopOverclockLoopSound();
+
+    const oscillator = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+
+    oscillator.type = 'sawtooth';
+    oscillator.frequency.setValueAtTime(120, ctx.currentTime);
+
+    gainNode.gain.setValueAtTime(0, ctx.currentTime);
+    gainNode.gain.linearRampToValueAtTime(0.08, ctx.currentTime + 0.2);
+
+    oscillator.connect(gainNode);
+    gainNode.connect(ctx.destination);
+
+    oscillator.start(ctx.currentTime);
+
+    this.overclockSoundOscillator = oscillator;
+    this.overclockSoundGain = gainNode;
+  }
+
+  stopOverclockLoopSound() {
+    if (this.overclockSoundOscillator) {
+      try {
+        const ctx = this.ensureAudioContext();
+        if (ctx && this.overclockSoundGain) {
+          this.overclockSoundGain.gain.setValueAtTime(this.overclockSoundGain.gain.value, ctx.currentTime);
+          this.overclockSoundGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+          this.overclockSoundOscillator.stop(ctx.currentTime + 0.15);
+        } else {
+          this.overclockSoundOscillator.stop();
+        }
+      } catch (e) {
+      }
+      this.overclockSoundOscillator = null;
+      this.overclockSoundGain = null;
+    }
+  }
+
+  updateOverclockSound() {
+    if (this.player.overclockActive && this.overclockSoundOscillator && this.overclockSoundGain) {
+      const ctx = this.ensureAudioContext();
+      if (ctx) {
+        const heatRatio = this.player.overclockHeat / 100;
+        const freq = 120 + heatRatio * 80;
+        this.overclockSoundOscillator.frequency.setValueAtTime(freq, ctx.currentTime);
+        const gain = 0.08 + heatRatio * 0.05;
+        this.overclockSoundGain.gain.setValueAtTime(gain, ctx.currentTime);
+      }
+    }
+  }
+
+  toggleOverclock() {
+    if (!this.running || this.paused) return;
+    if (this.teleport.isTeleporting()) return;
+
+    if (this.player.overclockActive) {
+      this.player.deactivateOverclock(false);
+      this.playOverclockStopSound(false);
+      this.stopOverclockLoopSound();
+      this.ui.showWarning('⚡ 超频模式已关闭', 1500, 'text-yellow-300');
+    } else {
+      if (!this.player.overclockUnlocked) {
+        this.ui.showWarning('🔒 超频模块未解锁，请在商店升级！', 2000);
+        return;
+      }
+      if (this.player.overclockCooldown > 0) {
+        this.ui.showWarning(`⏳ 超频冷却中：${Math.ceil(this.player.overclockCooldown)}秒`, 1500);
+        return;
+      }
+      if (this.player.fuel < 10) {
+        this.ui.showWarning('⛽ 燃料不足，无法启动超频！', 1500);
+        return;
+      }
+
+      if (this.player.activateOverclock()) {
+        this.playOverclockStartSound();
+        this.startOverclockLoopSound();
+        this.particles.spawnCircle(this.player.x, this.player.y, '#FFD700', 20, 4);
+        this.particles.spawnCircle(this.player.x, this.player.y, '#FF6B00', 15, 3);
+        this.renderer.shake(3, 0.4);
+        this.ui.showWarning('⚡ 超频模式启动！', 1500, 'text-yellow-300');
+      }
+    }
+  }
+
   start() {
     this.running = true;
     this.lastTime = performance.now();
@@ -231,6 +383,8 @@ export class Game {
       this.player.update(dt, this.world, this.input);
     }
 
+    this.updateOverclockSound();
+
     this.teleport.update(dt, this.player, this.world, this.particles, (cost) => {
       this.ui.showWarning(`✨ 传送成功！消耗 $${cost}`, 2000, 'text-cyan-300');
       this.particles.spawnCircle(this.player.x, this.player.y, '#FFD700', 25, 5);
@@ -254,13 +408,27 @@ export class Game {
     this.checkCollapses(dt);
     this.checkEnemyKills();
     this.checkLowResources();
+
+    if (this.player.overclockActive && Math.random() < 0.3) {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = this.player.width * 0.6 + Math.random() * 20;
+      this.particles.spawn(
+        this.player.x + Math.cos(angle) * dist,
+        this.player.y + Math.sin(angle) * dist,
+        Math.random() < 0.5 ? '#FFD700' : '#FF6B00',
+        2 + Math.random() * 2,
+        1 + Math.random(),
+        { gravity: -0.05, lifeMin: 15, lifeMax: 30 }
+      );
+    }
   }
 
   handleDigging(dt) {
     if (!this.input.dig || this.teleport.isTeleporting()) return;
 
     const target = this.player.getDigTarget();
-    const result = this.world.digTile(target.x, target.y, this.player.drillPower);
+    const effectiveDrillPower = this.player.getEffectiveDrillPower();
+    const result = this.world.digTile(target.x, target.y, effectiveDrillPower);
 
     if (result.success) {
       if (result.damaged) {
@@ -320,8 +488,10 @@ export class Game {
           setTimeout(() => this.triggerCollapse(target.x, target.y), 1000);
         }
 
-        this.player.fuel -= this.player.fuelConsumption * 0.5 * dt * 60;
-        this.player.addHeat(this.player.heatGeneration * 0.3 * dt * 60);
+        const effectiveFuelConsumption = this.player.getEffectiveFuelConsumption();
+        const effectiveHeatGeneration = this.player.getEffectiveHeatGeneration();
+        this.player.fuel -= effectiveFuelConsumption * 0.5 * dt * 60;
+        this.player.addHeat(effectiveHeatGeneration * 0.3 * dt * 60);
       }
     } else if (result.tooHard) {
       this.ui.showWarning('⛏️ 钻头等级不够，无法挖掘此方块！', 1000);

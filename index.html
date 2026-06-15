@@ -55,6 +55,36 @@
             </div>
             <span id="healthText" class="text-rose-400 text-xs w-16 text-right">100/100</span>
           </div>
+
+          <div id="overclockSection" class="hidden mt-3 pt-3 border-t border-yellow-700/50">
+            <div class="text-yellow-300 font-game text-xs mb-2 flex items-center justify-between">
+              <span>⚡ 超频模式</span>
+              <span id="overclockStatus" class="text-gray-400">未解锁</span>
+            </div>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="text-yellow-400 text-sm w-12">🔥热量</span>
+              <div class="w-40 h-4 bg-gray-800 rounded-full overflow-hidden border border-yellow-900">
+                <div id="overclockHeatBar" class="h-full bg-gradient-to-r from-yellow-500 via-orange-500 to-red-600 transition-all duration-200"></div>
+              </div>
+              <span id="overclockHeatText" class="text-yellow-400 text-xs w-16 text-right">0/100</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-orange-400 text-sm w-12">⏱️时间</span>
+              <div class="w-40 h-4 bg-gray-800 rounded-full overflow-hidden border border-orange-900">
+                <div id="overclockTimerBar" class="h-full bg-gradient-to-r from-amber-400 to-yellow-300 transition-all duration-200"></div>
+              </div>
+              <span id="overclockTimerText" class="text-orange-400 text-xs w-16 text-right">15.0s</span>
+            </div>
+            <div id="overclockCooldownSection" class="hidden mt-1">
+              <div class="flex items-center gap-2">
+                <span class="text-gray-400 text-sm w-12">❄️冷却</span>
+                <div class="w-40 h-4 bg-gray-800 rounded-full overflow-hidden border border-gray-700">
+                  <div id="overclockCooldownBar" class="h-full bg-gradient-to-r from-cyan-600 to-blue-400 transition-all duration-200"></div>
+                </div>
+                <span id="overclockCooldownText" class="text-cyan-400 text-xs w-16 text-right">30.0s</span>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="bg-black/70 rounded-lg p-4 space-y-2 border-2 border-green-600/50">
@@ -107,6 +137,7 @@
           <span>空格 钻探</span>
           <span>X 攻击</span>
           <span>T 紧急回城</span>
+          <span>Q 超频模式</span>
           <span>ESC 商店</span>
         </div>
       </div>
@@ -190,6 +221,7 @@
           <p class="ml-4">空格键 - 朝向方向钻探</p>
           <p class="ml-4">X 键 - 发射武器攻击</p>
           <p class="ml-4">T 键 - 紧急回城传送（消耗金币）</p>
+          <p class="ml-4">Q 键 - 超频模式（需升级解锁）</p>
           <p class="ml-4">ESC 键 - 打开商店（需在地面）</p>
           <p class="mt-4">⚠️ <strong>注意事项:</strong></p>
           <p class="ml-4">• 监控燃料、氧气和温度</p>
@@ -197,6 +229,7 @@
           <p class="ml-4">• 深度越深矿石售价加成越高</p>
           <p class="ml-4">• 毒气方块会释放持续毒气云</p>
           <p class="ml-4">• 小心不稳定方块引发塌方！</p>
+          <p class="ml-4">• 超频模式临时提速，但会快速产热</p>
         </div>
         <button id="startBtn" class="bg-yellow-500 hover:bg-yellow-400 text-gray-900 px-12 py-4 rounded-lg text-2xl font-game border-4 border-yellow-700 shadow-lg transform hover:scale-105 transition-all">
           开始游戏
