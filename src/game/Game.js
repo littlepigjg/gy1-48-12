@@ -7,6 +7,7 @@ import { UIManager } from './ui.js';
 import { ParticleSystem } from './particles.js';
 import { HazardManager } from './hazards.js';
 import { TeleportSystem } from './teleport.js';
+import { AudioManager } from './AudioManager.js';
 
 export class Game {
   constructor(canvas) {
@@ -34,14 +35,11 @@ export class Game {
       overclock: false
     };
 
-    this.audioCtx = null;
-    this.overclockSoundOscillator = null;
-    this.overclockSoundGain = null;
-
     this.bullets = [];
     this.particles = new ParticleSystem();
     this.hazards = new HazardManager();
     this.teleport = new TeleportSystem();
+    this.audio = new AudioManager();
     this.collapseTimer = 0;
 
     this.baseBuildingX = Math.floor(WORLD_WIDTH / 2) - 3;
@@ -194,112 +192,10 @@ export class Game {
     }
   }
 
-  ensureAudioContext() {
-    if (!this.audioCtx) {
-      try {
-        this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      } catch (e) {
-        console.warn('Web Audio API not supported');
-      }
-    }
-    return this.audioCtx;
-  }
-
-  playOverclockStartSound() {
-    const ctx = this.ensureAudioContext();
-    if (!ctx) return;
-
-    const oscillator = ctx.createOscillator();
-    const gainNode = ctx.createGain();
-
-    oscillator.type = 'sawtooth';
-    oscillator.frequency.setValueAtTime(200, ctx.currentTime);
-    oscillator.frequency.exponentialRampToValueAtTime(800, ctx.currentTime + 0.3);
-
-    gainNode.gain.setValueAtTime(0, ctx.currentTime);
-    gainNode.gain.linearRampToValueAtTime(0.2, ctx.currentTime + 0.1);
-    gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
-
-    oscillator.connect(gainNode);
-    gainNode.connect(ctx.destination);
-
-    oscillator.start(ctx.currentTime);
-    oscillator.stop(ctx.currentTime + 0.4);
-  }
-
-  playOverclockStopSound(forced = false) {
-    const ctx = this.ensureAudioContext();
-    if (!ctx) return;
-
-    const oscillator = ctx.createOscillator();
-    const gainNode = ctx.createGain();
-
-    oscillator.type = forced ? 'square' : 'sine';
-    oscillator.frequency.setValueAtTime(forced ? 600 : 400, ctx.currentTime);
-    oscillator.frequency.exponentialRampToValueAtTime(100, ctx.currentTime + 0.5);
-
-    gainNode.gain.setValueAtTime(0.2, ctx.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
-
-    oscillator.connect(gainNode);
-    gainNode.connect(ctx.destination);
-
-    oscillator.start(ctx.currentTime);
-    oscillator.stop(ctx.currentTime + 0.5);
-  }
-
-  startOverclockLoopSound() {
-    const ctx = this.ensureAudioContext();
-    if (!ctx) return;
-
-    this.stopOverclockLoopSound();
-
-    const oscillator = ctx.createOscillator();
-    const gainNode = ctx.createGain();
-
-    oscillator.type = 'sawtooth';
-    oscillator.frequency.setValueAtTime(120, ctx.currentTime);
-
-    gainNode.gain.setValueAtTime(0, ctx.currentTime);
-    gainNode.gain.linearRampToValueAtTime(0.08, ctx.currentTime + 0.2);
-
-    oscillator.connect(gainNode);
-    gainNode.connect(ctx.destination);
-
-    oscillator.start(ctx.currentTime);
-
-    this.overclockSoundOscillator = oscillator;
-    this.overclockSoundGain = gainNode;
-  }
-
-  stopOverclockLoopSound() {
-    if (this.overclockSoundOscillator) {
-      try {
-        const ctx = this.ensureAudioContext();
-        if (ctx && this.overclockSoundGain) {
-          this.overclockSoundGain.gain.setValueAtTime(this.overclockSoundGain.gain.value, ctx.currentTime);
-          this.overclockSoundGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
-          this.overclockSoundOscillator.stop(ctx.currentTime + 0.15);
-        } else {
-          this.overclockSoundOscillator.stop();
-        }
-      } catch (e) {
-      }
-      this.overclockSoundOscillator = null;
-      this.overclockSoundGain = null;
-    }
-  }
-
   updateOverclockSound() {
-    if (this.player.overclockActive && this.overclockSoundOscillator && this.overclockSoundGain) {
-      const ctx = this.ensureAudioContext();
-      if (ctx) {
-        const heatRatio = this.player.overclockHeat / 100;
-        const freq = 120 + heatRatio * 80;
-        this.overclockSoundOscillator.frequency.setValueAtTime(freq, ctx.currentTime);
-        const gain = 0.08 + heatRatio * 0.05;
-        this.overclockSoundGain.gain.setValueAtTime(gain, ctx.currentTime);
-      }
+    if (this.player.overclockActive) {
+      const heatRatio = this.player.overclockHeat / 100;
+      this.audio.updateOverclockLoop(heatRatio);
     }
   }
 
@@ -309,8 +205,8 @@ export class Game {
 
     if (this.player.overclockActive) {
       this.player.deactivateOverclock(false);
-      this.playOverclockStopSound(false);
-      this.stopOverclockLoopSound();
+      this.audio.playOverclockStop(false);
+      this.audio.stopOverclockLoop();
       this.ui.showWarning('⚡ 超频模式已关闭', 1500, 'text-yellow-300');
     } else {
       if (!this.player.overclockUnlocked) {
@@ -327,8 +223,8 @@ export class Game {
       }
 
       if (this.player.activateOverclock()) {
-        this.playOverclockStartSound();
-        this.startOverclockLoopSound();
+        this.audio.playOverclockStart();
+        this.audio.startOverclockLoop();
         this.particles.spawnCircle(this.player.x, this.player.y, '#FFD700', 20, 4);
         this.particles.spawnCircle(this.player.x, this.player.y, '#FF6B00', 15, 3);
         this.renderer.shake(3, 0.4);
